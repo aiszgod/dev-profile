@@ -40,21 +40,28 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
         aiAnalysis
       };
 
-      // Call backend API
-const response = await fetch(`${import.meta.env.VITE_API_URL}/api/chat`, {        method: 'POST',
+      // Call backend API - FIXED: Use the correct URL
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/chat`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: messages.slice(1), // Exclude initial greeting
+          messages: messages, // ✅ FIXED: Send ALL messages including the greeting
           profileData,
           sessionId
         })
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Server error: ${response.status}`);
+        let errorMessage = `Server error: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // If response is not JSON
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
