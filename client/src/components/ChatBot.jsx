@@ -40,17 +40,24 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
         aiAnalysis
       };
 
-      // 🔥 CRITICAL FIX: Handle the URL correctly to avoid double /api/
-      // Get the base URL from environment variable
+      // 🔥 CRITICAL FIX: Get the correct API URL
+      // Based on the error, your VITE_API_URL already contains '/api'
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       
-      // Clean up the URL - remove trailing slash if present
+      // Remove any trailing slash
       const cleanBaseUrl = baseUrl.replace(/\/$/, '');
       
-      // Construct the full URL - assuming your backend routes are at /api/
-      const apiUrl = `${cleanBaseUrl}/api/chat`;
+      // Check if baseUrl already ends with '/api'
+      let apiUrl;
+      if (cleanBaseUrl.endsWith('/api')) {
+        // If VITE_API_URL already ends with '/api', just add '/chat'
+        apiUrl = `${cleanBaseUrl}/chat`;
+      } else {
+        // Otherwise, add '/api/chat'
+        apiUrl = `${cleanBaseUrl}/api/chat`;
+      }
       
-      console.log('🔗 API URL:', apiUrl); // For debugging
+      console.log('🔗 API URL:', apiUrl); // Should be: https://thenewdevprof.onrender.com/api/chat
       
       // Call backend API
       const response = await fetch(apiUrl, {
@@ -59,7 +66,7 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: messages, // Send ALL messages including the greeting
+          messages: messages,
           profileData,
           sessionId
         })
@@ -88,7 +95,7 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
         role: 'model', 
-        content: `Sorry, I encountered an error: ${error.message}. \n\nPlease check:\n1. Ensure your API is running\n2. Check your .env configuration\n3. Try refreshing the page`
+        content: `API Error: ${error.message}\n\nCurrent URL: ${apiUrl}\n\nPlease check your backend is running.`
       }]);
     } finally {
       setIsLoading(false);
@@ -100,13 +107,6 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
       e.preventDefault();
       handleSend();
     }
-  };
-
-  // Helper to check the current API URL
-  const debugApiUrl = () => {
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    const cleanBaseUrl = baseUrl.replace(/\/$/, '');
-    return `${cleanBaseUrl}/api/chat`;
   };
 
   return (
@@ -198,12 +198,6 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
             <p className="text-xs text-gray-500 mt-2 text-center">
               Powered by Google Gemini
             </p>
-            {/* Debug info - remove in production */}
-            {process.env.NODE_ENV === 'development' && (
-              <p className="text-xs text-gray-600 mt-1 text-center">
-                API: {debugApiUrl()}
-              </p>
-            )}
           </div>
         </div>
       )}
