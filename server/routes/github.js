@@ -2,13 +2,9 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
-// Cache
 const githubCache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const headers = {
-  'User-Agent': 'DevProfileAnalyzer',
-  Authorization: `Bearer ${process.env.GITHUB_TOKEN}`
-};
+const CACHE_DURATION = 5 * 60 * 1000;
+
 router.get('/:username', async (req, res) => {
   const { username } = req.params;
 
@@ -35,16 +31,12 @@ router.get('/:username', async (req, res) => {
     ]);
 
     const repos = reposResponse.data.filter(repo => !repo.fork);
-
-    // ⭐ Total stars
     const totalStars = repos.reduce((sum, r) => sum + r.stargazers_count, 0);
 
-    // 🧠 Top languages (weighted by stars)
     const languages = {};
     repos.forEach(repo => {
       if (repo.language) {
-        languages[repo.language] =
-          (languages[repo.language] || 0) + repo.stargazers_count;
+        languages[repo.language] = (languages[repo.language] || 0) + repo.stargazers_count;
       }
     });
 
@@ -53,7 +45,6 @@ router.get('/:username', async (req, res) => {
       .slice(0, 5)
       .map(([language, stars]) => ({ language, stars }));
 
-    // 🏆 Top 8 repos
     const topRepos = repos.slice(0, 8).map(repo => ({
       name: repo.name,
       description: repo.description,
@@ -64,30 +55,24 @@ router.get('/:username', async (req, res) => {
       updated: repo.updated_at
     }));
 
+    // ✅ FIXED: Flatten the structure for frontend compatibility
     const result = {
-      profile: {
-        username: userResponse.data.login,
-        name: userResponse.data.name,
-        avatar: userResponse.data.avatar_url,
-        bio: userResponse.data.bio,
-        publicRepos: userResponse.data.public_repos,
-        followers: userResponse.data.followers,
-        following: userResponse.data.following,
-        profileUrl: userResponse.data.html_url
-      },
-      stats: {
-        totalStars,
-        topLanguages
-      },
-      topRepos
+      username: userResponse.data.login,
+      name: userResponse.data.name,
+      avatar: userResponse.data.avatar_url,
+      bio: userResponse.data.bio,
+      publicRepos: userResponse.data.public_repos,
+      followers: userResponse.data.followers,
+      following: userResponse.data.following,
+      profileUrl: userResponse.data.html_url,
+      totalStars,
+      topLanguages,
+      repos: topRepos
     };
 
-    githubCache.set(cacheKey, {
-      data: result,
-      timestamp: Date.now()
-    });
-
+    githubCache.set(cacheKey, { data: result, timestamp: Date.now() });
     res.json(result);
+
   } catch (error) {
     console.error('GitHub API Error:', error.message);
 
