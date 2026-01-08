@@ -30,6 +30,8 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
+    let apiUrl; // Declare apiUrl here so it's accessible in catch block
+
     try {
       // Prepare profile data
       const profileData = {
@@ -40,25 +42,18 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
         aiAnalysis
       };
 
-      // 🔥 CRITICAL FIX: Get the correct API URL
-      // Based on the error, your VITE_API_URL already contains '/api'
+      // Construct API URL
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      
-      // Remove any trailing slash
       const cleanBaseUrl = baseUrl.replace(/\/$/, '');
       
-      // Check if baseUrl already ends with '/api'
-      let apiUrl;
       if (cleanBaseUrl.endsWith('/api')) {
-        // If VITE_API_URL already ends with '/api', just add '/chat'
         apiUrl = `${cleanBaseUrl}/chat`;
       } else {
-        // Otherwise, add '/api/chat'
         apiUrl = `${cleanBaseUrl}/api/chat`;
       }
       
-      console.log('🔗 API URL:', apiUrl); // Should be: https://thenewdevprof.onrender.com/api/chat
-      
+      console.log('🔗 API URL:', apiUrl);
+
       // Call backend API
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -72,11 +67,13 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
         })
       });
 
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
         let errorMessage = `Server error: ${response.status}`;
         try {
           const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
+          errorMessage = errorData.error || errorData.message || errorData.details || errorMessage;
         } catch (e) {
           // If response is not JSON
         }
@@ -84,6 +81,7 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
       }
 
       const data = await response.json();
+      console.log('Response data:', data);
       
       if (!data.success || !data.message) {
         throw new Error('Invalid response from server');
@@ -95,7 +93,7 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
         role: 'model', 
-        content: `API Error: ${error.message}\n\nCurrent URL: ${apiUrl}\n\nPlease check your backend is running.`
+        content: `Sorry, I encountered an error: ${error.message}\n\nAPI URL: ${apiUrl || 'Not defined'}`
       }]);
     } finally {
       setIsLoading(false);
@@ -107,6 +105,23 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
       e.preventDefault();
       handleSend();
     }
+  };
+
+  // SUGGESTED QUESTIONS TO ASK THE AI
+  const suggestedQuestions = [
+    "What are my strongest skills based on my profile?",
+    "Which GitHub repositories should I highlight?",
+    "How can I improve my LeetCode ranking?",
+    "What career path suits me best?",
+    "Suggest projects to boost my profile",
+    "Review my resume and give feedback",
+    "Compare my profile with industry standards"
+  ];
+
+  const askSuggestedQuestion = (question) => {
+    setInput(question);
+    // Auto-send after a brief delay
+    setTimeout(() => handleSend(), 100);
   };
 
   return (
@@ -165,10 +180,30 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
                 </div>
               </div>
             ))}
+            
+            {/* Suggested Questions */}
+            {messages.length <= 2 && (
+              <div className="mt-4">
+                <p className="text-xs text-gray-400 mb-2">Try asking:</p>
+                <div className="flex flex-wrap gap-2">
+                  {suggestedQuestions.slice(0, 3).map((question, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => askSuggestedQuestion(question)}
+                      className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg border border-gray-700 transition"
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3">
+                <div className="bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 flex items-center gap-2">
                   <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
+                  <span className="text-sm text-gray-300">Thinking...</span>
                 </div>
               </div>
             )}
@@ -196,7 +231,7 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
               </button>
             </div>
             <p className="text-xs text-gray-500 mt-2 text-center">
-              Powered by Google Gemini
+              Powered by Google Gemini • Ask about skills, career advice, or profile analysis
             </p>
           </div>
         </div>
