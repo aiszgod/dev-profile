@@ -1,51 +1,59 @@
 const express = require('express');
-const multer = require('multer');
-const { parseResume } = require('../utils/parser');
+const path = require('path');
 const router = express.Router();
 
-// Configure multer
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
+// ✅ CORRECT IMPORT - destructure the function
+const { parseResume } = require('../utils/parser');
 
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || 
-        file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-        file.originalname.match(/\.(pdf|docx|doc)$/i)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only PDF and DOCX files allowed!'), false);
-    }
-  }
-});
+// Test the import immediately
+if (typeof parseResume !== 'function') {
+  console.error('❌ parseResume is not a function! Check utils/parser.js export');
+  process.exit(1);
+} else {
+  console.log('✅ parseResume imported successfully');
+}
 
-// Upload and parse resume
-router.post('/', upload.single('resume'), async (req, res) => {
+// Multer middleware is applied in server.js
+router.post('/', async (req, res) => {
+  console.log('📤 Upload endpoint hit');
+  console.log('📁 Request file:', req.file);
+  
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      console.error('❌ No file in request');
+      return res.status(400).json({ 
+        error: 'No file uploaded',
+        success: false
+      });
     }
+
+    console.log('✅ File received:', {
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      filename: req.file.filename,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      path: req.file.path
+    });
     
-    const parsedData = await parseResume(req.file.path, req.file.mimetype);
+    // Parse the resume
+    console.log('🔄 Starting parse...');
+    const parsedData = await parseResume(req.file.path);
+    console.log('✅ Parse complete:', parsedData);
     
     res.json({
       success: true,
       filename: req.file.originalname,
-      size: req.file.size,
       parsedData
     });
     
   } catch (error) {
-    console.error('Upload Error:', error.message);
-    res.status(500).json({ error: 'Failed to parse resume: ' + error.message });
+    console.error('❌ Upload route error:', error);
+    res.status(500).json({ 
+      error: 'Failed to process resume',
+      details: error.message,
+      success: false
+    });
   }
 });
 
