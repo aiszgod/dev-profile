@@ -19,7 +19,7 @@ const ProfileConnect = ({ setGithubData, setLeetcodeData, setHackerrankData }) =
       
       if (githubUser.trim()) {
         promises.push(
-          fetch(`http://localhost:5000/api/github/${githubUser.trim()}`)
+fetch(`${import.meta.env.VITE_API_URL}/github/${githubUser.trim()}`)
             .then(res => res.json())
             .then(data => {
               console.log('✅ GitHub data:', data);
@@ -34,7 +34,7 @@ const ProfileConnect = ({ setGithubData, setLeetcodeData, setHackerrankData }) =
       
       if (leetcodeUser.trim()) {
         promises.push(
-          fetch(`http://localhost:5000/api/leetcode/${leetcodeUser.trim()}`)
+fetch(`${import.meta.env.VITE_API_URL}/leetcode/${leetcodeUser.trim()}`)
             .then(res => res.json())
             .then(data => {
               console.log('✅ LeetCode data:', data);
@@ -49,7 +49,7 @@ const ProfileConnect = ({ setGithubData, setLeetcodeData, setHackerrankData }) =
       
       if (hackerrankUser.trim()) {
         promises.push(
-          fetch(`http://localhost:5000/api/hackerrank/${hackerrankUser.trim()}`)
+fetch(`${import.meta.env.VITE_API_URL}/hackerrank/${hackerrankUser.trim()}`)
             .then(res => res.json())
             .then(data => {
               console.log('✅ HackerRank data:', data);
