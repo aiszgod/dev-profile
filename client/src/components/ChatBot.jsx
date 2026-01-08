@@ -41,8 +41,7 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
       };
 
       // Call backend API
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/chat`, {
-        method: 'POST',
+const response = await fetch(`${import.meta.env.VITE_API_URL}/api/chat`, {        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },

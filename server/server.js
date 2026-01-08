@@ -93,8 +93,84 @@ app.get('/', (req, res) => {
 app.use('/api/github', require('./routes/github'));
 app.use('/api/leetcode', require('./routes/leetcode'));
 app.use('/api/hackerrank', require('./routes/hackerrank'));
-app.use('/api/chat', require('./routes/chat'));
+// ========== ADD CHAT ROUTE DIRECTLY ==========
+app.post('/api/chat', async (req, res) => {
+  try {
+    console.log('📨 Chat API called');
+    const { messages, profileData } = req.body;
 
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No messages provided' 
+      });
+    }
+
+    // Build context from profile data
+    let context = 'You are a helpful career advisor. Provide guidance based on developer profile.\n\n';
+    
+    if (profileData) {
+      if (profileData.githubData) {
+        context += `GitHub: ${profileData.githubData.username || 'N/A'}\n`;
+      }
+      if (profileData.leetcodeData) {
+        context += `LeetCode Solved: ${profileData.leetcodeData.totalSolved || 0}\n`;
+      }
+      if (profileData.hackerrankData) {
+        context += `HackerRank Badges: ${profileData.hackerrankData.badges?.length || 0}\n`;
+      }
+      if (profileData.resumeData?.skills) {
+        context += `Skills: ${profileData.resumeData.skills.join(', ').slice(0, 100)}...\n`;
+      }
+      context += '\n';
+    }
+
+    // Build conversation
+    const conversation = messages
+      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+      .join('\n');
+    
+    const prompt = `${context}${conversation}\n\nAssistant:`;
+
+    // Call Gemini API
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 1000,
+          }
+        })
+      }
+    );
+
+    const data = await geminiResponse.json();
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+                  "I'm here to help! How can I assist you with your developer profile today?";
+
+    console.log('✅ Chat response sent');
+    res.json({ 
+      success: true, 
+      message: reply.trim(),
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('🚨 Chat Error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to process chat request',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+// ========== END CHAT ROUTE ==========
 // ✅ Upload route with multer middleware
 app.use('/api/upload', upload.single('resume'), require('./routes/upload'));
 
