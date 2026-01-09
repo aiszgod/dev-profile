@@ -34,6 +34,9 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Trust proxy for Render
+app.set('trust proxy', 1);
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -71,6 +74,7 @@ const upload = multer({
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Dev Profile Analyzer API ✅',
+    geminiKey: process.env.GEMINI_API_KEY ? `Set (${process.env.GEMINI_API_KEY.substring(0, 10)}...)` : 'Missing',
     endpoints: {
       github: '/api/github/:username',
       leetcode: '/api/leetcode/:username', 
@@ -83,158 +87,140 @@ app.get('/', (req, res) => {
 });
 
 // ============================================
-// CHAT ROUTE - INLINE FOR DEBUGGING
+// CHAT ROUTE - WITH EXTENSIVE DEBUGGING
 // ============================================
 app.post('/api/chat', async (req, res) => {
   console.log('🎯 Chat endpoint hit');
-  console.log('📦 Request body keys:', Object.keys(req.body));
   
   try {
-    // Check if API key exists
+    // Detailed API Key Check
     if (!process.env.GEMINI_API_KEY) {
-      console.error('❌ GEMINI_API_KEY not found in environment variables!');
+      console.error('❌ GEMINI_API_KEY environment variable not found!');
       return res.status(500).json({ 
         success: false, 
-        error: 'Gemini API key not configured. Please add GEMINI_API_KEY to environment variables.' 
+        error: 'Gemini API key not configured in environment variables.' 
       });
     }
+
+    const apiKeyPrefix = process.env.GEMINI_API_KEY.substring(0, 10);
+    console.log(`🔑 API Key found: ${apiKeyPrefix}...`);
 
     const { messages, profileData } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      console.error('❌ Invalid messages format');
       return res.status(400).json({ 
         success: false, 
-        error: 'No messages provided or invalid format' 
+        error: 'No messages provided' 
       });
     }
 
-    console.log('✅ Messages received:', messages.length);
-    console.log('✅ Profile data:', profileData ? 'Present' : 'Missing');
+    console.log('✅ Messages:', messages.length);
 
-    // Build context
-    let context = 'You are a helpful career advisor specializing in software development. ';
-    context += 'Provide detailed, actionable advice based on the developer profile.\n\n';
-    
-    let hasData = false;
+    // Build simple context
+    let context = 'You are a helpful career advisor for software developers. Provide clear, actionable advice.\n\n';
     
     if (profileData) {
       if (profileData.resumeData) {
-        hasData = true;
-        context += `=== RESUME ===\n`;
-        context += `Name: ${profileData.resumeData.name || 'N/A'}\n`;
-        context += `Skills: ${profileData.resumeData.skills || 'N/A'}\n`;
-        context += `Experience: ${profileData.resumeData.experience || 'N/A'}\n`;
-        context += `Education: ${profileData.resumeData.education || 'N/A'}\n\n`;
+        context += `Resume: ${profileData.resumeData.name}, Skills: ${profileData.resumeData.skills}\n`;
       }
-
       if (profileData.githubData) {
-        hasData = true;
-        context += `=== GITHUB ===\n`;
-        context += `Username: ${profileData.githubData.username}\n`;
-        context += `Repos: ${profileData.githubData.publicRepos}\n`;
-        context += `Stars: ${profileData.githubData.totalStars}\n`;
-        context += `Followers: ${profileData.githubData.followers}\n`;
-        if (profileData.githubData.topLanguages) {
-          context += `Languages: ${profileData.githubData.topLanguages}\n`;
-        }
-        context += '\n';
+        context += `GitHub: ${profileData.githubData.username}, ${profileData.githubData.publicRepos} repos\n`;
       }
-      
       if (profileData.leetcodeData) {
-        hasData = true;
-        context += `=== LEETCODE ===\n`;
-        context += `Username: ${profileData.leetcodeData.username}\n`;
-        context += `Solved: ${profileData.leetcodeData.totalSolved}\n`;
-        context += `Easy: ${profileData.leetcodeData.easySolved}, Medium: ${profileData.leetcodeData.mediumSolved}, Hard: ${profileData.leetcodeData.hardSolved}\n\n`;
+        context += `LeetCode: ${profileData.leetcodeData.totalSolved} solved\n`;
       }
-      
-      if (profileData.hackerrankData) {
-        hasData = true;
-        context += `=== HACKERRANK ===\n`;
-        context += `Username: ${profileData.hackerrankData.username}\n`;
-        context += `Challenges: ${profileData.hackerrankData.challengesSolved}\n`;
-        context += `Badges: ${profileData.hackerrankData.totalBadges}\n\n`;
-      }
-      
       if (profileData.aiAnalysis) {
-        hasData = true;
-        context += `=== AI ANALYSIS ===\n`;
-        context += `Overall Score: ${profileData.aiAnalysis.overallScore}/100\n`;
-        if (profileData.aiAnalysis.summary) {
-          context += `Summary: ${profileData.aiAnalysis.summary}\n`;
-        }
-        context += '\n';
+        context += `AI Score: ${profileData.aiAnalysis.overallScore}/100\n`;
       }
     }
 
-    if (!hasData) {
-      context += 'NOTE: No profile data uploaded yet. Encourage user to upload resume and connect profiles.\n\n';
-    }
+    const lastMessage = messages[messages.length - 1].content;
+    const prompt = `${context}\nUser Question: ${lastMessage}\n\nProvide a helpful response:`;
 
-    // Build conversation
-    const conversation = messages
-      .slice(-5)
-      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-      .join('\n');
-    
-    const prompt = `${context}CONVERSATION:\n${conversation}\n\nAssistant:`;
+    console.log('📝 Prompt length:', prompt.length);
 
-    console.log('🔄 Calling Gemini API...');
-
-    // Call Gemini API - FIXED MODEL NAME
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
-    
-    const geminiResponse = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    // Try multiple model configurations
+    const modelConfigs = [
+      {
+        name: 'gemini-pro',
+        url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent'
       },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: prompt }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1500,
-          topP: 0.85,
-          topK: 40
-        }
-      })
-    });
+      {
+        name: 'gemini-1.5-flash',
+        url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
+      },
+      {
+        name: 'gemini-1.5-pro',
+        url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent'
+      }
+    ];
 
-    console.log('✅ Gemini API response status:', geminiResponse.status);
-
-    if (!geminiResponse.ok) {
-      const errorData = await geminiResponse.text();
-      console.error('❌ Gemini API error:', errorData);
-      throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorData}`);
-    }
-
-    const data = await geminiResponse.json();
+    let lastError = null;
     
-    if (data.error) {
-      console.error('❌ Gemini error:', data.error);
-      throw new Error(`Gemini API error: ${data.error.message}`);
+    for (const config of modelConfigs) {
+      try {
+        console.log(`🔄 Trying model: ${config.name}...`);
+        
+        const geminiResponse = await fetch(
+          `${config.url}?key=${process.env.GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{ text: prompt }]
+              }],
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 1000,
+              }
+            })
+          }
+        );
+
+        console.log(`📡 Response status: ${geminiResponse.status}`);
+
+        if (!geminiResponse.ok) {
+          const errorText = await geminiResponse.text();
+          console.log(`❌ ${config.name} failed:`, errorText);
+          lastError = errorText;
+          continue; // Try next model
+        }
+
+        const data = await geminiResponse.json();
+        
+        if (data.error) {
+          console.log(`❌ ${config.name} API error:`, data.error);
+          lastError = data.error.message;
+          continue;
+        }
+
+        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (reply) {
+          console.log(`✅ Success with ${config.name}!`);
+          return res.json({ 
+            success: true, 
+            message: reply.trim(),
+            model: config.name,
+            timestamp: new Date().toISOString()
+          });
+        }
+      } catch (err) {
+        console.log(`❌ ${config.name} exception:`, err.message);
+        lastError = err.message;
+        continue;
+      }
     }
 
-    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-                  "I'm here to help! How can I assist you with your developer profile today?";
-
-    console.log('✅ Response generated successfully');
-
-    res.json({ 
-      success: true, 
-      message: reply.trim(),
-      timestamp: new Date().toISOString()
-    });
+    // If all models failed
+    throw new Error(`All models failed. Last error: ${lastError}`);
 
   } catch (err) {
     console.error('🚨 Chat Error:', err.message);
-    console.error('🚨 Error stack:', err.stack);
+    console.error('🚨 Stack:', err.stack);
     
     res.status(500).json({ 
       success: false, 
@@ -279,6 +265,9 @@ const server = app.listen(PORT, () => {
   console.log(`📱 Client: http://localhost:5173`);
   console.log(`📁 Uploads: ${uploadsDir}`);
   console.log(`🔑 Gemini API Key: ${process.env.GEMINI_API_KEY ? '✅ Set' : '❌ Missing'}`);
+  if (process.env.GEMINI_API_KEY) {
+    console.log(`   Preview: ${process.env.GEMINI_API_KEY.substring(0, 15)}...`);
+  }
   console.log('✅ All APIs ready');
   console.log('='.repeat(60));
 });
