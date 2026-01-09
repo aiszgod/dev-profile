@@ -8,15 +8,11 @@ const fs = require('fs');
 
 dotenv.config();
 const { parseResume } = require('./utils/parser');
-console.log('🧪 Testing parseResume import:', typeof parseResume);
-if (typeof parseResume !== 'function') {
-  console.error('❌ CRITICAL: parseResume is not imported correctly!');
-  process.exit(1);
-}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Create uploads folder FIRST
+// Create uploads folder
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -46,24 +42,21 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// ✅ Multer configuration
+// Multer configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    console.log('📂 Saving to:', uploadsDir);
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     const uniqueName = Date.now() + '-' + file.originalname;
-    console.log('💾 Filename:', uniqueName);
     cb(null, uniqueName);
   }
 });
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    console.log('🔍 Checking file:', file.originalname, file.mimetype);
     if (file.mimetype === 'application/pdf' || 
         file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
         file.originalname.match(/\.(pdf|docx)$/i)) {
@@ -84,96 +77,180 @@ app.get('/', (req, res) => {
       hackerrank: '/api/hackerrank/:username',
       upload: '/api/upload (POST multipart)',
       analyze: '/api/analyze (POST)',
-      chat: '/api/chat'
+      chat: '/api/chat (POST)'
     }
   });
 });
 
-// API Routes
-app.use('/api/github', require('./routes/github'));
-app.use('/api/leetcode', require('./routes/leetcode'));
-app.use('/api/hackerrank', require('./routes/hackerrank'));
-// ========== ADD CHAT ROUTE DIRECTLY ==========
+// ============================================
+// CHAT ROUTE - INLINE FOR DEBUGGING
+// ============================================
 app.post('/api/chat', async (req, res) => {
+  console.log('🎯 Chat endpoint hit');
+  console.log('📦 Request body keys:', Object.keys(req.body));
+  
   try {
-    console.log('📨 Chat API called');
-    const { messages, profileData } = req.body;
-
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({ 
+    // Check if API key exists
+    if (!process.env.GEMINI_API_KEY) {
+      console.error('❌ GEMINI_API_KEY not found in environment variables!');
+      return res.status(500).json({ 
         success: false, 
-        error: 'No messages provided' 
+        error: 'Gemini API key not configured. Please add GEMINI_API_KEY to environment variables.' 
       });
     }
 
-    // Build context from profile data
-    let context = 'You are a helpful career advisor. Provide guidance based on developer profile.\n\n';
+    const { messages, profileData } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      console.error('❌ Invalid messages format');
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No messages provided or invalid format' 
+      });
+    }
+
+    console.log('✅ Messages received:', messages.length);
+    console.log('✅ Profile data:', profileData ? 'Present' : 'Missing');
+
+    // Build context
+    let context = 'You are a helpful career advisor specializing in software development. ';
+    context += 'Provide detailed, actionable advice based on the developer profile.\n\n';
+    
+    let hasData = false;
     
     if (profileData) {
+      if (profileData.resumeData) {
+        hasData = true;
+        context += `=== RESUME ===\n`;
+        context += `Name: ${profileData.resumeData.name || 'N/A'}\n`;
+        context += `Skills: ${profileData.resumeData.skills || 'N/A'}\n`;
+        context += `Experience: ${profileData.resumeData.experience || 'N/A'}\n`;
+        context += `Education: ${profileData.resumeData.education || 'N/A'}\n\n`;
+      }
+
       if (profileData.githubData) {
-        context += `GitHub: ${profileData.githubData.username || 'N/A'}\n`;
+        hasData = true;
+        context += `=== GITHUB ===\n`;
+        context += `Username: ${profileData.githubData.username}\n`;
+        context += `Repos: ${profileData.githubData.publicRepos}\n`;
+        context += `Stars: ${profileData.githubData.totalStars}\n`;
+        context += `Followers: ${profileData.githubData.followers}\n`;
+        if (profileData.githubData.topLanguages) {
+          context += `Languages: ${profileData.githubData.topLanguages}\n`;
+        }
+        context += '\n';
       }
+      
       if (profileData.leetcodeData) {
-        context += `LeetCode Solved: ${profileData.leetcodeData.totalSolved || 0}\n`;
+        hasData = true;
+        context += `=== LEETCODE ===\n`;
+        context += `Username: ${profileData.leetcodeData.username}\n`;
+        context += `Solved: ${profileData.leetcodeData.totalSolved}\n`;
+        context += `Easy: ${profileData.leetcodeData.easySolved}, Medium: ${profileData.leetcodeData.mediumSolved}, Hard: ${profileData.leetcodeData.hardSolved}\n\n`;
       }
+      
       if (profileData.hackerrankData) {
-        context += `HackerRank Badges: ${profileData.hackerrankData.badges?.length || 0}\n`;
+        hasData = true;
+        context += `=== HACKERRANK ===\n`;
+        context += `Username: ${profileData.hackerrankData.username}\n`;
+        context += `Challenges: ${profileData.hackerrankData.challengesSolved}\n`;
+        context += `Badges: ${profileData.hackerrankData.totalBadges}\n\n`;
       }
-      if (profileData.resumeData?.skills) {
-        context += `Skills: ${profileData.resumeData.skills.join(', ').slice(0, 100)}...\n`;
+      
+      if (profileData.aiAnalysis) {
+        hasData = true;
+        context += `=== AI ANALYSIS ===\n`;
+        context += `Overall Score: ${profileData.aiAnalysis.overallScore}/100\n`;
+        if (profileData.aiAnalysis.summary) {
+          context += `Summary: ${profileData.aiAnalysis.summary}\n`;
+        }
+        context += '\n';
       }
-      context += '\n';
+    }
+
+    if (!hasData) {
+      context += 'NOTE: No profile data uploaded yet. Encourage user to upload resume and connect profiles.\n\n';
     }
 
     // Build conversation
     const conversation = messages
+      .slice(-5)
       .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
       .join('\n');
     
-    const prompt = `${context}${conversation}\n\nAssistant:`;
+    const prompt = `${context}CONVERSATION:\n${conversation}\n\nAssistant:`;
+
+    console.log('🔄 Calling Gemini API...');
 
     // Call Gemini API
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1000,
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    
+    const geminiResponse = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
           }
-        })
-      }
-    );
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1500,
+          topP: 0.85,
+          topK: 40
+        }
+      })
+    });
+
+    console.log('✅ Gemini API response status:', geminiResponse.status);
+
+    if (!geminiResponse.ok) {
+      const errorData = await geminiResponse.text();
+      console.error('❌ Gemini API error:', errorData);
+      throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorData}`);
+    }
 
     const data = await geminiResponse.json();
+    
+    if (data.error) {
+      console.error('❌ Gemini error:', data.error);
+      throw new Error(`Gemini API error: ${data.error.message}`);
+    }
+
     const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text ||
                   "I'm here to help! How can I assist you with your developer profile today?";
 
-    console.log('✅ Chat response sent');
+    console.log('✅ Response generated successfully');
+
     res.json({ 
       success: true, 
       message: reply.trim(),
       timestamp: new Date().toISOString()
     });
 
-  } catch (error) {
-    console.error('🚨 Chat Error:', error.message);
+  } catch (err) {
+    console.error('🚨 Chat Error:', err.message);
+    console.error('🚨 Error stack:', err.stack);
+    
     res.status(500).json({ 
       success: false, 
       error: 'Failed to process chat request',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: err.message
     });
   }
 });
-// ========== END CHAT ROUTE ==========
-// ✅ Upload route with multer middleware
-app.use('/api/upload', upload.single('resume'), require('./routes/upload'));
 
+// ============================================
+// OTHER ROUTES
+// ============================================
+app.use('/api/github', require('./routes/github'));
+app.use('/api/leetcode', require('./routes/leetcode'));
+app.use('/api/hackerrank', require('./routes/hackerrank'));
+app.use('/api/upload', upload.single('resume'), require('./routes/upload'));
 app.use('/api/analyze', require('./routes/analyze'));
 
 // 404 handler
@@ -201,7 +278,8 @@ const server = app.listen(PORT, () => {
   console.log(`🚀 Server: http://localhost:${PORT}`);
   console.log(`📱 Client: http://localhost:5173`);
   console.log(`📁 Uploads: ${uploadsDir}`);
-  console.log('✅ All APIs ready (GitHub/LeetCode/HR/CV)');
+  console.log(`🔑 Gemini API Key: ${process.env.GEMINI_API_KEY ? '✅ Set' : '❌ Missing'}`);
+  console.log('✅ All APIs ready');
   console.log('='.repeat(60));
 });
 
