@@ -34,13 +34,16 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
 
     try {
       // Prepare profile data
-      const profileData = {
-        resumeData,
-        githubData,
-        leetcodeData,
-        hackerrankData,
-        aiAnalysis
-      };
+     // In handleSend function, update the profileData object:
+const profileData = {
+  resumeData,
+  githubData,
+  leetcodeData,
+  hackerrankData,
+  aiAnalysis, // Make sure this is included
+  // Also include parsed text for better context
+  parsedText: resumeData?.fullText ? resumeData.fullText.substring(0, 1000) : null
+};
 
       // Construct API URL
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -237,5 +240,4 @@ export default function ChatBot({ githubData, leetcodeData, hackerrankData, resu
         </div>
       )}
     </>
-  );
-}
+  );}
