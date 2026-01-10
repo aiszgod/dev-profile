@@ -1,56 +1,47 @@
+// client/src/utils/apiUrl.js
+
 /**
- * Get the API base URL and ensure it's properly formatted
- * This prevents double /api issues
+ * Get the base API URL without /api suffix
+ * Handles both:
+ * - http://localhost:5000
+ * - https://thenewdevprof.onrender.com
+ * - https://thenewdevprof.onrender.com/api
  */
-export const getApiUrl = () => {
-  // Get the base URL from environment variable with safe fallback
-  let baseUrl = import.meta.env.VITE_API_URL;
+export const getBaseUrl = () => {
+  let apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   
-  // Log for debugging
-  console.log('🔍 Raw VITE_API_URL:', baseUrl);
-  
-  // If undefined or empty, use production URL
-  if (!baseUrl || baseUrl === 'undefined' || baseUrl.trim() === '') {
-    baseUrl = 'https://thenewdevprof.onrender.com';
-    console.log('⚠️  VITE_API_URL not set, using production URL');
+  // Remove trailing /api if present
+  if (apiUrl.endsWith('/api')) {
+    apiUrl = apiUrl.replace(/\/api$/, '');
   }
   
-  console.log('🔍 Base URL:', baseUrl);
+  // Remove trailing slash
+  apiUrl = apiUrl.replace(/\/$/, '');
   
-  // Remove trailing slashes
-  baseUrl = baseUrl.replace(/\/+$/, '');
-  
-  // Remove /api if it exists at the end
-  baseUrl = baseUrl.replace(/\/api$/, '');
-  
-  // Add /api exactly once
-  const finalUrl = `${baseUrl}/api`;
-  
-  console.log('✅ Final API URL:', finalUrl);
-  
-  return finalUrl;
+  return apiUrl;
 };
 
 /**
- * Get the base URL without /api (for Socket.IO connection)
+ * Get full API endpoint URL
+ * @param {string} endpoint - API endpoint (e.g., '/auth/google', 'github/username')
+ * @returns {string} Full URL (e.g., 'https://thenewdevprof.onrender.com/api/auth/google')
  */
-export const getSocketUrl = () => {
-  let baseUrl = import.meta.env.VITE_API_URL;
+export const getApiUrl = (endpoint) => {
+  const baseUrl = getBaseUrl();
   
-  // If undefined or empty, use production URL
-  if (!baseUrl || baseUrl === 'undefined' || baseUrl.trim() === '') {
-    baseUrl = 'https://thenewdevprof.onrender.com';
-  }
+  // Ensure endpoint starts with /
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   
-  // Remove trailing slashes
-  baseUrl = baseUrl.replace(/\/+$/, '');
+  // Add /api prefix if not already present in endpoint
+  const finalEndpoint = cleanEndpoint.startsWith('/api') 
+    ? cleanEndpoint 
+    : `/api${cleanEndpoint}`;
   
-  // Remove /api if it exists
-  baseUrl = baseUrl.replace(/\/api$/, '');
-  
-  console.log('🔌 Socket URL:', baseUrl);
-  
-  return baseUrl;
+  return `${baseUrl}${finalEndpoint}`;
 };
 
-export default getApiUrl;
+// Export for direct use
+export default {
+  getBaseUrl,
+  getApiUrl
+};
