@@ -26,8 +26,13 @@ export const getBaseUrl = () => {
  * @param {string} endpoint - API endpoint (e.g., '/auth/google', 'github/username')
  * @returns {string} Full URL (e.g., 'https://thenewdevprof.onrender.com/api/auth/google')
  */
-export const getApiUrl = (endpoint) => {
+export const getApiUrl = (endpoint = '') => {
   const baseUrl = getBaseUrl();
+  
+  // If no endpoint provided, return base URL with /api
+  if (!endpoint) {
+    return `${baseUrl}/api`;
+  }
   
   // Ensure endpoint starts with /
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
