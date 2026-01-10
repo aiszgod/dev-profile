@@ -462,14 +462,11 @@ app.use('/api/upload', upload.single('resume'), require('./routes/upload'));
 app.use('/api/analyze', require('./routes/analyze'));
 // TEMPORARY DEBUG - Remove after testing
 // Add this AFTER other routes, BEFORE error handlers
-app.get('/api/test-email', async (req, res) => {
-  try {
-    const { testEmailConfiguration } = require('./utils/emailService');
-    const result = await testEmailConfiguration();
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+// TEMPORARY TEST ROUTE - Add before error handlers
+app.get('/api/test-sendgrid', async (req, res) => {
+  const { testEmailConfiguration } = require('./utils/emailService');
+  const result = await testEmailConfiguration();
+  res.json(result);
 });
 // ============================================
 // VERIFICATION ROUTES (NEW - FIXED)
