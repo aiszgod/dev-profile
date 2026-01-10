@@ -461,14 +461,15 @@ app.use('/api/hackerrank', require('./routes/hackerrank'));
 app.use('/api/upload', upload.single('resume'), require('./routes/upload'));
 app.use('/api/analyze', require('./routes/analyze'));
 // TEMPORARY DEBUG - Remove after testing
-app.get('/api/test-email-config', (req, res) => {
-  res.json({
-    emailUser: process.env.EMAIL_USER || 'NOT SET',
-    emailPassExists: !!process.env.EMAIL_PASS,
-    emailPassLength: process.env.EMAIL_PASS?.length || 0,
-    emailPassPreview: process.env.EMAIL_PASS ? 
-      process.env.EMAIL_PASS.substring(0, 4) + '****' : 'NOT SET'
-  });
+// Add this AFTER other routes, BEFORE error handlers
+app.get('/api/test-email', async (req, res) => {
+  try {
+    const { testEmailConfiguration } = require('./utils/emailService');
+    const result = await testEmailConfiguration();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 // ============================================
 // VERIFICATION ROUTES (NEW - FIXED)
