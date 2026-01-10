@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Send, Loader2, Users, CheckCircle } from 'lucide-react';
-import { useSocket } from '../../context/SocketContext';
+import { useSocket } from '../context/SocketContext';
 import { getApiUrl } from '../../utils/apiUrl';
 
 const ChatRoom = () => {
