@@ -90,52 +90,25 @@
 //   sendVerificationEmail,
 //   sendCandidateNotification
 // };
-// server/utils/emailService.js
-const nodemailer = require('nodemailer');
+// server/utils/emailService.js - SendGrid Version
+const sgMail = require('@sendgrid/mail');
 
-// Validate environment variables
-if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-  console.warn('⚠️  EMAIL_USER or EMAIL_PASS not configured');
+// Initialize SendGrid
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  console.log('✅ SendGrid initialized');
+} else {
+  console.warn('⚠️  SENDGRID_API_KEY not configured');
 }
-
-// Create transporter with better config
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  // Timeout settings
-  connectionTimeout: 10000,  // 10 seconds
-  greetingTimeout: 5000,     // 5 seconds  
-  socketTimeout: 10000,      // 10 seconds
-  // Debug
-  debug: process.env.NODE_ENV === 'development',
-  logger: process.env.NODE_ENV === 'development'
-});
-
-// Verify transporter on startup
-transporter.verify(function(error, success) {
-  if (error) {
-    console.error('❌ Email transporter error:', error.message);
-    console.error('   Check EMAIL_USER and EMAIL_PASS in environment variables');
-  } else {
-    console.log('✅ Email server ready:', process.env.EMAIL_USER);
-  }
-});
 
 // Send verification email to employer
 const sendVerificationEmail = async (employerEmail, candidateName, chatLink) => {
   try {
-    console.log('📧 Attempting to send email to employer:', employerEmail);
-    
-    if (!employerEmail || !employerEmail.includes('@')) {
-      throw new Error('Invalid employer email address');
-    }
+    console.log('📧 Sending email to employer:', employerEmail);
 
-    const mailOptions = {
-      from: `"Dev Profile Analyzer" <${process.env.EMAIL_USER}>`,
+    const msg = {
       to: employerEmail,
+      from: process.env.EMAIL_USER || 'noreply@devprofileanalyzer.com',
       subject: `Background Verification Request for ${candidateName}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb; border-radius: 10px;">
@@ -182,25 +155,22 @@ const sendVerificationEmail = async (employerEmail, candidateName, chatLink) => 
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              This is an automated email from Dev Profile Analyzer<br>
-              Background Verification System
+              Dev Profile Analyzer - Background Verification System
             </p>
           </div>
         </div>
       `
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Employer email sent successfully:', info.messageId);
-    console.log('   To:', employerEmail);
-    console.log('   Response:', info.response);
-    
-    return { success: true, messageId: info.messageId };
+    const result = await sgMail.send(msg);
+    console.log('✅ Employer email sent:', result[0].statusCode);
+    return { success: true, messageId: result[0].headers['x-message-id'] };
     
   } catch (error) {
-    console.error('❌ Failed to send employer email:', error.message);
-    console.error('   To:', employerEmail);
-    console.error('   Error details:', error);
+    console.error('❌ Email error:', error.message);
+    if (error.response) {
+      console.error('   SendGrid error:', error.response.body);
+    }
     return { success: false, error: error.message };
   }
 };
@@ -208,15 +178,11 @@ const sendVerificationEmail = async (employerEmail, candidateName, chatLink) => 
 // Send notification to candidate
 const sendCandidateNotification = async (candidateEmail, candidateName, chatLink) => {
   try {
-    console.log('📧 Attempting to send email to candidate:', candidateEmail);
-    
-    if (!candidateEmail || !candidateEmail.includes('@')) {
-      throw new Error('Invalid candidate email address');
-    }
+    console.log('📧 Sending email to candidate:', candidateEmail);
 
-    const mailOptions = {
-      from: `"Dev Profile Analyzer" <${process.env.EMAIL_USER}>`,
+    const msg = {
       to: candidateEmail,
+      from: process.env.EMAIL_USER || 'noreply@devprofileanalyzer.com',
       subject: 'Your Background Verification is Being Processed',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb; border-radius: 10px;">
@@ -230,12 +196,12 @@ const sendCandidateNotification = async (candidateEmail, candidateName, chatLink
             </p>
             
             <p style="font-size: 16px; color: #374151; line-height: 1.6;">
-              Your background verification process has been <strong>successfully initiated</strong>. 
+              Your background verification process has been successfully initiated. 
               We've contacted your previous employer/faculty.
             </p>
             
             <p style="font-size: 16px; color: #374151; line-height: 1.6;">
-              You can track the verification progress here:
+              Track the verification progress here:
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
@@ -256,33 +222,29 @@ const sendCandidateNotification = async (candidateEmail, candidateName, chatLink
             <div style="background: #ecfdf5; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #10b981;">
               <p style="margin: 0; color: #047857; font-size: 14px;">
                 <strong>💡 What happens next?</strong><br>
-                Your reference will receive an email to join the verification chat. 
-                You'll be notified of any updates.
+                Your reference will receive an email to join the verification chat.
               </p>
             </div>
             
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              This is an automated email from Dev Profile Analyzer<br>
-              Background Verification System
+              Dev Profile Analyzer - Background Verification System
             </p>
           </div>
         </div>
       `
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Candidate email sent successfully:', info.messageId);
-    console.log('   To:', candidateEmail);
-    console.log('   Response:', info.response);
-    
-    return { success: true, messageId: info.messageId };
+    const result = await sgMail.send(msg);
+    console.log('✅ Candidate email sent:', result[0].statusCode);
+    return { success: true, messageId: result[0].headers['x-message-id'] };
     
   } catch (error) {
-    console.error('❌ Failed to send candidate email:', error.message);
-    console.error('   To:', candidateEmail);
-    console.error('   Error details:', error);
+    console.error('❌ Email error:', error.message);
+    if (error.response) {
+      console.error('   SendGrid error:', error.response.body);
+    }
     return { success: false, error: error.message };
   }
 };
