@@ -177,13 +177,13 @@ function Dashboard() {
       </footer>
 
       {/* Chatbot */}
-      <ChatBot 
+      {/* <ChatBot 
         githubData={githubData}
         leetcodeData={leetcodeData}
         hackerrankData={hackerrankData}
         resumeData={resumeData}
         aiAnalysis={aiAnalysis}
-      />
+      /> */}
     </div>
   );
 }

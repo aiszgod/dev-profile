@@ -460,7 +460,16 @@ app.use('/api/leetcode', require('./routes/leetcode'));
 app.use('/api/hackerrank', require('./routes/hackerrank'));
 app.use('/api/upload', upload.single('resume'), require('./routes/upload'));
 app.use('/api/analyze', require('./routes/analyze'));
-
+// TEMPORARY DEBUG - Remove after testing
+app.get('/api/test-email-config', (req, res) => {
+  res.json({
+    emailUser: process.env.EMAIL_USER || 'NOT SET',
+    emailPassExists: !!process.env.EMAIL_PASS,
+    emailPassLength: process.env.EMAIL_PASS?.length || 0,
+    emailPassPreview: process.env.EMAIL_PASS ? 
+      process.env.EMAIL_PASS.substring(0, 4) + '****' : 'NOT SET'
+  });
+});
 // ============================================
 // VERIFICATION ROUTES (NEW - FIXED)
 // ============================================
