@@ -1,6 +1,7 @@
+// ChatRoom.jsx - IMPROVED UI/UX
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Send, Loader2, Users, CheckCircle } from 'lucide-react';
+import { Send, Loader2, Users, MessageCircle, Wifi, WifiOff, UserCircle } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import { getApiUrl } from '../utils/apiUrl';
 
@@ -24,23 +25,18 @@ const ChatRoom = () => {
   useEffect(() => {
     const fetchRoomData = async () => {
       try {
-        // ✅ FIXED: Use getApiUrl helper
         const apiUrl = getApiUrl();
         const url = `${apiUrl}/verification/room/${roomId}`;
-        
-        console.log('📥 Fetching room data from:', url);
         
         const response = await fetch(url);
         const data = await response.json();
 
         if (data.success) {
           setRoomData(data.data);
-          console.log('✅ Room data loaded:', data.data);
         } else {
           throw new Error(data.error || 'Failed to load room');
         }
       } catch (err) {
-        console.error('❌ Fetch room error:', err);
         setError(err.message || 'Failed to load chat room');
       } finally {
         setLoading(false);
@@ -55,19 +51,13 @@ const ChatRoom = () => {
   // Join room when user is set
   useEffect(() => {
     if (socket && connected && user && roomId) {
-      console.log('🔌 Joining room:', roomId, 'as', user.name);
-      
       socket.emit('join-room', { roomId, user });
 
-      // Listen for messages
       socket.on('receive-message', (message) => {
-        console.log('💬 Received message:', message);
         setMessages(prev => [...prev, message]);
       });
 
-      // Listen for user joined
       socket.on('user-joined', (data) => {
-        console.log('👤 User joined:', data);
         const systemMessage = {
           sender: { name: 'System', role: 'system' },
           message: `${data.user} (${data.role}) joined the chat`,
@@ -77,7 +67,6 @@ const ChatRoom = () => {
         setMessages(prev => [...prev, systemMessage]);
       });
 
-      // Listen for typing indicators
       socket.on('user-typing', (data) => {
         setTypingUser(data.user);
         setIsTyping(true);
@@ -88,9 +77,7 @@ const ChatRoom = () => {
         setTypingUser('');
       });
 
-      // Load existing messages
       socket.on('load-messages', (existingMessages) => {
-        console.log('📜 Loaded messages:', existingMessages.length);
         setMessages(existingMessages);
       });
 
@@ -117,7 +104,6 @@ const ChatRoom = () => {
       role
     };
     setUser(userData);
-    console.log('👤 User set:', userData);
   };
 
   // Send message
@@ -132,11 +118,9 @@ const ChatRoom = () => {
       sender: user
     };
 
-    console.log('📤 Sending message:', messageData);
     socket.emit('send-message', messageData);
     setNewMessage('');
 
-    // Stop typing
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
@@ -160,19 +144,22 @@ const ChatRoom = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-slate-950 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-16 h-16 animate-spin text-indigo-400 mx-auto" />
+          <p className="text-slate-300 text-lg">Loading chat room...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
-          <p className="text-gray-600">{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-slate-950 flex items-center justify-center p-4">
+        <div className="bg-gradient-to-br from-red-900/30 to-pink-900/30 border border-red-500/30 rounded-3xl p-8 max-w-md w-full text-center backdrop-blur-xl">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-white mb-2">Error</h2>
+          <p className="text-red-300">{error}</p>
         </div>
       </div>
     );
@@ -180,44 +167,50 @@ const ChatRoom = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-slate-950 flex items-center justify-center p-4">
+        <div className="bg-gradient-to-br from-slate-900/90 to-indigo-900/50 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-8 max-w-md w-full shadow-2xl">
           <div className="text-center mb-8">
-            <Users className="w-16 h-16 text-indigo-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <div className="relative inline-block mb-4">
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 blur-2xl opacity-50 animate-pulse"></div>
+              <Users className="relative w-16 h-16 text-indigo-400 mx-auto" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">
               Join Verification Chat
             </h2>
-            <p className="text-gray-600">
-              Candidate: {roomData?.candidateId?.name}
+            <p className="text-slate-400">
+              Candidate: <span className="text-indigo-400 font-semibold">{roomData?.candidateId?.name}</span>
             </p>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <button
               onClick={() => handleJoinChat('recruiter', 'Recruiter', roomData?.participants?.recruiter?.email)}
-              className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-semibold"
+              className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white py-4 rounded-xl transition-all duration-300 font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
             >
+              <UserCircle className="w-5 h-5" />
               Join as Recruiter
             </button>
 
             <button
               onClick={() => handleJoinChat('candidate', roomData?.candidateId?.name, roomData?.candidateId?.email)}
-              className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-semibold"
+              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white py-4 rounded-xl transition-all duration-300 font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
             >
+              <UserCircle className="w-5 h-5" />
               Join as Candidate
             </button>
 
             <button
               onClick={() => handleJoinChat('employer', 'Employer', roomData?.participants?.employer?.email)}
-              className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition font-semibold"
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-4 rounded-xl transition-all duration-300 font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
             >
+              <UserCircle className="w-5 h-5" />
               Join as Employer
             </button>
           </div>
 
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">
-              <strong>Room ID:</strong> <span className="font-mono">{roomId}</span>
+          <div className="mt-6 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
+            <p className="text-sm text-slate-400 text-center">
+              <strong>Room ID:</strong> <span className="font-mono text-indigo-400">{roomId}</span>
             </p>
           </div>
         </div>
@@ -225,58 +218,85 @@ const ChatRoom = () => {
     );
   }
 
+  const getRoleColor = (role) => {
+    switch(role) {
+      case 'recruiter': return 'from-indigo-600 to-blue-600';
+      case 'candidate': return 'from-green-600 to-emerald-600';
+      case 'employer': return 'from-purple-600 to-pink-600';
+      default: return 'from-gray-600 to-slate-600';
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-slate-950 text-white">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">
-              Background Verification Chat
-            </h1>
-            <p className="text-sm text-gray-600">
-              {roomData?.candidateId?.name} - {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-gray-600">
-              {connected ? 'Connected' : 'Disconnected'}
-            </span>
+      <div className="bg-gradient-to-r from-gray-900/90 via-slate-900/90 to-gray-900/90 border-b border-white/10 backdrop-blur-xl sticky top-0 z-10 shadow-2xl">
+        <div className="max-w-5xl mx-auto px-4 py-4 sm:py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 bg-gradient-to-r ${getRoleColor(user.role)} rounded-xl`}>
+                <MessageCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-lg sm:text-xl font-bold text-white">
+                  Background Verification Chat
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-400">
+                  {roomData?.candidateId?.name} • You're the <span className="text-indigo-400 font-semibold capitalize">{user.role}</span>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {connected ? (
+                <>
+                  <Wifi className="w-4 h-4 text-green-400" />
+                  <span className="text-xs sm:text-sm text-green-400 font-medium hidden sm:inline">Connected</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-4 h-4 text-red-400" />
+                  <span className="text-xs sm:text-sm text-red-400 font-medium hidden sm:inline">Disconnected</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="max-w-4xl mx-auto p-4">
-        <div className="bg-white rounded-lg shadow-lg h-[calc(100vh-200px)] flex flex-col">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="max-w-5xl mx-auto p-4">
+        <div className="bg-gradient-to-br from-slate-900/50 to-gray-900/50 backdrop-blur-xl border border-slate-700/50 rounded-3xl shadow-2xl h-[calc(100vh-200px)] flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
             {messages.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500">No messages yet. Start the conversation!</p>
+              <div className="text-center py-16">
+                <MessageCircle className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-500 text-lg">No messages yet</p>
+                <p className="text-slate-600 text-sm mt-2">Start the conversation below</p>
               </div>
             ) : (
               messages.map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`flex ${msg.sender?.email === user.email ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${msg.sender?.email === user.email ? 'justify-end' : 'justify-start'} animate-slide-up`}
                 >
                   <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl shadow-lg ${
                       msg.isSystem
-                        ? 'bg-gray-100 text-gray-600 text-sm italic'
+                        ? 'bg-slate-800/50 text-slate-400 text-sm italic border border-slate-700/50'
                         : msg.sender?.email === user.email
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-gray-200 text-gray-900'
+                        ? `bg-gradient-to-r ${getRoleColor(user.role)} text-white`
+                        : 'bg-slate-800 text-slate-100 border border-slate-700/50'
                     }`}
                   >
                     {!msg.isSystem && (
-                      <p className="text-xs opacity-75 mb-1">
-                        {msg.sender?.name} ({msg.sender?.role})
+                      <p className="text-xs opacity-75 mb-1.5 flex items-center gap-1.5">
+                        <UserCircle className="w-3 h-3" />
+                        <span className="font-semibold">{msg.sender?.name}</span>
+                        <span className="opacity-60">• {msg.sender?.role}</span>
                       </p>
                     )}
-                    <p>{msg.message}</p>
-                    <p className="text-xs opacity-75 mt-1">
+                    <p className="leading-relaxed">{msg.message}</p>
+                    <p className="text-xs opacity-60 mt-2">
                       {new Date(msg.timestamp).toLocaleTimeString()}
                     </p>
                   </div>
@@ -288,14 +308,21 @@ const ChatRoom = () => {
 
           {/* Typing Indicator */}
           {isTyping && (
-            <div className="px-4 py-2 text-sm text-gray-500 italic">
-              {typingUser} is typing...
+            <div className="px-6 py-3 bg-slate-800/30 border-t border-slate-700/30">
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+                <span className="italic">{typingUser} is typing...</span>
+              </div>
             </div>
           )}
 
           {/* Input */}
-          <form onSubmit={handleSendMessage} className="border-t border-gray-200 p-4">
-            <div className="flex gap-2">
+          <form onSubmit={handleSendMessage} className="border-t border-slate-700/50 p-4 bg-slate-900/30">
+            <div className="flex gap-3">
               <input
                 type="text"
                 value={newMessage}
@@ -305,14 +332,15 @@ const ChatRoom = () => {
                 }}
                 placeholder="Type your message..."
                 disabled={!connected}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
+                className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 disabled:opacity-50 transition-all"
               />
               <button
                 type="submit"
                 disabled={!connected || !newMessage.trim()}
-                className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className={`bg-gradient-to-r ${getRoleColor(user.role)} rounded-xl px-6 py-3 hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg hover:shadow-xl flex items-center gap-2 font-medium`}
               >
                 <Send className="w-5 h-5" />
+                <span className="hidden sm:inline">Send</span>
               </button>
             </div>
           </form>
