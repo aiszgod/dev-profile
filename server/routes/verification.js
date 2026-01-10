@@ -257,15 +257,7 @@ router.post('/submit', async (req, res) => {
     const chatLink = `${process.env.CLIENT_URL}/chat/${roomId}`;
     console.log('🔗 Chat link:', chatLink);
 
-    // Send emails (non-blocking)
-    console.log('📧 Sending emails...');
-    const emailResults = await Promise.allSettled([
-      sendVerificationEmail(employerEmail, name, chatLink),
-      sendCandidateNotification(email, name, chatLink)
-    ]);
-
-    console.log('📬 Email results:', emailResults.map(r => r.status));
-
+    // Send response IMMEDIATELY (don't wait for emails)
     res.json({
       success: true,
       message: 'Verification initiated successfully',
@@ -274,10 +266,21 @@ router.post('/submit', async (req, res) => {
         roomId,
         chatLink,
         emailStatus: {
-          employer: emailResults[0].status === 'fulfilled' ? 'sent' : 'failed',
-          candidate: emailResults[1].status === 'fulfilled' ? 'sent' : 'failed'
+          employer: 'sending',
+          candidate: 'sending'
         }
       }
+    });
+
+    // Send emails AFTER response (fire and forget)
+    console.log('📧 Sending emails in background...');
+    Promise.allSettled([
+      sendVerificationEmail(employerEmail, name, chatLink),
+      sendCandidateNotification(email, name, chatLink)
+    ]).then(emailResults => {
+      console.log('📬 Email results:', emailResults.map(r => r.status));
+    }).catch(err => {
+      console.error('📧 Email error:', err.message);
     });
 
   } catch (error) {
