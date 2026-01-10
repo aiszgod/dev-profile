@@ -87,7 +87,7 @@ function Dashboard() {
                 className="group flex items-center gap-2 bg-gradient-to-r from-green-600/20 to-emerald-600/20 hover:from-green-600/30 hover:to-emerald-600/30 border border-green-500/50 hover:border-green-500/70 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm font-medium shadow-lg hover:shadow-green-500/20"
               >
                 <UserCheck className="w-4 h-4 transition-transform group-hover:scale-110" />
-                <span>New Verification</span>
+                <span>Background Verification</span>
               </a>
               <button
                 onClick={logout}
