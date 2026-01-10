@@ -32,21 +32,66 @@ const PORT = process.env.PORT || 5000;
 // ============================================
 // MONGODB CONNECTION
 // ============================================
+// const connectDB = async () => {
+//   try {
+//     if (process.env.MONGODB_URI) {
+//       await mongoose.connect(process.env.MONGODB_URI);
+//       console.log('✅ MongoDB connected');
+//     } else {
+//       console.warn('⚠️  MongoDB not configured. Verification features will be disabled.');
+//     }
+//   } catch (err) {
+//     console.error('❌ MongoDB connection error:', err.message);
+//   }
+// };
+
+// connectDB();
+// ============================================
+// MONGODB CONNECTION (IMPROVED)
+// ============================================
 const connectDB = async () => {
   try {
-    if (process.env.MONGODB_URI) {
-      await mongoose.connect(process.env.MONGODB_URI);
-      console.log('✅ MongoDB connected');
-    } else {
-      console.warn('⚠️  MongoDB not configured. Verification features will be disabled.');
+    if (!process.env.MONGODB_URI) {
+      console.warn('⚠️  MONGODB_URI not found. Verification features disabled.');
+      return;
     }
+
+    console.log('🔄 Connecting to MongoDB...');
+    
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+      socketTimeoutMS: 45000,
+      maxPoolSize: 10,
+      minPoolSize: 2,
+    });
+    
+    console.log('✅ MongoDB connected successfully');
+    console.log('📊 Database:', mongoose.connection.db.databaseName);
+    
   } catch (err) {
-    console.error('❌ MongoDB connection error:', err.message);
+    console.error('❌ MongoDB connection failed:', err.message);
+    console.error('🔧 Verification features will be disabled');
+    
+    // Don't crash the server, just log the error
+    // The app will still work for non-verification features
   }
 };
 
-connectDB();
+// Handle MongoDB connection events
+mongoose.connection.on('connected', () => {
+  console.log('🟢 Mongoose connected to MongoDB');
+});
 
+mongoose.connection.on('error', (err) => {
+  console.error('🔴 Mongoose connection error:', err.message);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('🟡 Mongoose disconnected from MongoDB');
+});
+
+// Call the connection function
+connectDB();
 // ============================================
 // SOCKET.IO SETUP
 // ============================================
