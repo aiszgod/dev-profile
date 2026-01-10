@@ -10,12 +10,82 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 
 dotenv.config();
 const { parseResume } = require('./utils/parser');
 
+// Debug environment variables
+console.log('🔍 Environment Check:');
+console.log('CLIENT_URL:', process.env.CLIENT_URL);
+console.log('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL);
+console.log('PORT:', process.env.PORT);
+console.log('MONGODB_URI:', process.env.MONGODB_URI ? '✅ Set' : '❌ Not set');
+console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✅ Set' : '❌ Not set');
+
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
+
+// ============================================
+// MONGODB CONNECTION
+// ============================================
+const connectDB = async () => {
+  try {
+    if (process.env.MONGODB_URI) {
+      await mongoose.connect(process.env.MONGODB_URI);
+      console.log('✅ MongoDB connected');
+    } else {
+      console.warn('⚠️  MongoDB not configured. Verification features will be disabled.');
+    }
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err.message);
+  }
+};
+
+connectDB();
+
+// ============================================
+// SOCKET.IO SETUP
+// ============================================
+const io = new Server(httpServer, {
+  cors: {
+    origin: [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://dev-prof-analyzer-arvind.vercel.app',
+      process.env.CLIENT_URL
+    ].filter(Boolean),
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000
+});
+
+// Initialize socket handlers only if MongoDB is connected
+if (mongoose.connection.readyState === 1) {
+  try {
+    require('./sockets/chatHandler')(io);
+    console.log('✅ Socket.IO chat handler initialized');
+  } catch (err) {
+    console.warn('⚠️  Socket chat handler not found:', err.message);
+  }
+} else {
+  mongoose.connection.on('connected', () => {
+    try {
+      require('./sockets/chatHandler')(io);
+      console.log('✅ Socket.IO chat handler initialized');
+    } catch (err) {
+      console.warn('⚠️  Socket chat handler not found:', err.message);
+    }
+  });
+}
+
+app.set('io', io);
 
 // Create uploads folder
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -54,7 +124,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   
   console.log('🔐 Google OAuth configured');
 } else {
-  console.warn('⚠️  Google OAuth not configured (missing CLIENT_ID or CLIENT_SECRET)');
+  console.warn('⚠️  Google OAuth not configured');
 }
 
 // JWT Auth Middleware
@@ -82,8 +152,9 @@ app.use(cors({
   origin: [
     'http://localhost:5173',
     'http://localhost:3000',
-    'https://dev-prof-analyzer-arvind.vercel.app'
-  ],
+    'https://dev-prof-analyzer-arvind.vercel.app',
+    process.env.CLIENT_URL
+  ].filter(Boolean),
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -93,25 +164,21 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Session middleware for Passport
 app.use(session({
   secret: process.env.JWT_SECRET || 'your-session-secret',
   resave: false,
   saveUninitialized: false,
   cookie: { 
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000
   }
 }));
 
-// Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Trust proxy
 app.set('trust proxy', 1);
 
-// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -152,43 +219,43 @@ const upload = multer({
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Dev Profile Analyzer API ✅',
-    geminiKey: process.env.GEMINI_API_KEY ? `Set (${process.env.GEMINI_API_KEY.substring(0, 10)}...)` : '❌ Missing',
-    googleAuth: process.env.GOOGLE_CLIENT_ID ? '✅ Configured' : '❌ Not configured',
-    jwtSecret: process.env.JWT_SECRET ? '✅ Set' : '❌ Missing',
+    version: '2.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    features: {
+      profileAnalysis: '✅',
+      googleAuth: process.env.GOOGLE_CLIENT_ID ? '✅' : '❌',
+      aiChat: process.env.GEMINI_API_KEY ? '✅' : '❌',
+      backgroundVerification: mongoose.connection.readyState === 1 ? '✅' : '❌',
+      realTimeChat: '✅',
+      emailNotifications: process.env.EMAIL_USER ? '✅' : '❌'
+    },
     endpoints: {
-      auth: {
-        login: '/api/auth/google',
-        callback: '/api/auth/google/callback',
-        me: '/api/auth/me',
-        logout: '/api/auth/logout'
-      },
-      github: '/api/github/:username',
-      leetcode: '/api/leetcode/:username', 
-      hackerrank: '/api/hackerrank/:username',
-      upload: '/api/upload (POST multipart)',
-      analyze: '/api/analyze (POST)',
-      chat: '/api/chat (POST)'
+      auth: '/api/auth/*',
+      verification: '/api/verification/*',
+      profiles: '/api/github|leetcode|hackerrank/:username',
+      upload: '/api/upload',
+      analyze: '/api/analyze',
+      chat: '/api/chat'
     }
   });
 });
 
 // ============================================
-// AUTH ROUTES - FIXED VERSION
+// AUTH ROUTES
 // ============================================
-
-// Initiate Google OAuth
 app.get('/api/auth/google', (req, res, next) => {
   console.log('🔵 Initiating Google OAuth...');
+  console.log('🔍 CLIENT_URL:', process.env.CLIENT_URL);
+  
   passport.authenticate('google', {
     scope: ['profile', 'email']
   })(req, res, next);
 });
 
-// Google OAuth callback - WITH EXTENSIVE DEBUGGING
 app.get('/api/auth/google/callback',
   (req, res, next) => {
     console.log('🔵 Google callback received');
-    console.log('📍 Full callback URL:', req.url);
+    console.log('📍 Full callback URL:', req.originalUrl);
     console.log('📍 Query params:', req.query);
     
     passport.authenticate('google', { 
@@ -198,21 +265,25 @@ app.get('/api/auth/google/callback',
   },
   (req, res) => {
     try {
-      console.log('✅ Authentication successful');
-      console.log('👤 User data:', req.user);
-
       if (!req.user) {
-        console.error('❌ No user data received from Google');
+        console.error('❌ No user data');
         return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}?error=no_user_data`);
       }
 
-      // Validate JWT_SECRET exists
       if (!process.env.JWT_SECRET) {
-        console.error('❌ JWT_SECRET not configured!');
+        console.error('❌ JWT_SECRET not configured');
         return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}?error=jwt_secret_missing`);
       }
 
-      // Generate JWT token
+      console.log('✅ Authentication successful');
+      console.log('👤 User data:', {
+        id: req.user.id,
+        email: req.user.email,
+        name: req.user.name,
+        picture: req.user.picture,
+        provider: req.user.provider
+      });
+
       const token = jwt.sign(
         { 
           id: req.user.id, 
@@ -224,57 +295,42 @@ app.get('/api/auth/google/callback',
         { expiresIn: '7d' }
       );
 
-      console.log('🔑 Token generated:', token.substring(0, 20) + '...');
+      console.log('🔑 Token generated:', token.substring(0, 50) + '...');
 
-      // Redirect to frontend with token
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-      const redirectUrl = `${clientUrl}/auth/callback?token=${token}`;
-      
+      const redirectUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/callback?token=${token}`;
       console.log('🔄 Redirecting to:', redirectUrl);
+      
       res.redirect(redirectUrl);
       
     } catch (error) {
       console.error('❌ Auth callback error:', error);
-      console.error('Stack:', error.stack);
-      
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-      res.redirect(`${clientUrl}?error=token_generation_failed&message=${encodeURIComponent(error.message)}`);
+      res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}?error=token_generation_failed`);
     }
   }
 );
 
-// Get current user (protected route)
 app.get('/api/auth/me', authenticateToken, (req, res) => {
   console.log('👤 /auth/me called for user:', req.user.email);
-  res.json({ 
-    success: true, 
-    user: req.user 
-  });
+  res.json({ success: true, user: req.user });
 });
 
-// Logout
 app.post('/api/auth/logout', (req, res) => {
-  console.log('👋 User logged out');
   res.json({ success: true, message: 'Logged out successfully' });
 });
 
 // ============================================
-// CHAT ROUTE
+// CHAT ROUTE (EXISTING AI CHAT)
 // ============================================
 app.post('/api/chat', async (req, res) => {
   console.log('🎯 Chat endpoint hit');
   
   try {
     if (!process.env.GEMINI_API_KEY) {
-      console.error('❌ GEMINI_API_KEY environment variable not found!');
       return res.status(500).json({ 
         success: false, 
-        error: 'Gemini API key not configured in environment variables.' 
+        error: 'Gemini API key not configured' 
       });
     }
-
-    const apiKeyPrefix = process.env.GEMINI_API_KEY.substring(0, 10);
-    console.log(`🔑 API Key found: ${apiKeyPrefix}...`);
 
     const { messages, profileData } = req.body;
 
@@ -285,9 +341,7 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    console.log('✅ Messages:', messages.length);
-
-    let context = 'You are a helpful career advisor for software developers. Provide clear, actionable advice.\n\n';
+    let context = 'You are a helpful career advisor for software developers.\n\n';
     
     if (profileData) {
       if (profileData.resumeData) {
@@ -307,88 +361,48 @@ app.post('/api/chat', async (req, res) => {
     const lastMessage = messages[messages.length - 1].content;
     const prompt = `${context}\nUser Question: ${lastMessage}\n\nProvide a helpful response:`;
 
-    console.log('📝 Prompt length:', prompt.length);
-
     const modelConfigs = [
-      {
-        name: 'gemini-1.5-flash',
-        url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
-      },
-      {
-        name: 'gemini-pro',
-        url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent'
-      }
+      { name: 'gemini-1.5-flash', url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent' },
+      { name: 'gemini-pro', url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent' }
     ];
 
-    let lastError = null;
-    
     for (const config of modelConfigs) {
       try {
-        console.log(`🔄 Trying model: ${config.name}...`);
-        
         const geminiResponse = await fetch(
           `${config.url}?key=${process.env.GEMINI_API_KEY}`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [{
-                parts: [{ text: prompt }]
-              }],
-              generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 1000,
-              }
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
             })
           }
         );
 
-        console.log(`📡 Response status: ${geminiResponse.status}`);
-
-        if (!geminiResponse.ok) {
-          const errorText = await geminiResponse.text();
-          console.log(`❌ ${config.name} failed:`, errorText);
-          lastError = errorText;
-          continue;
-        }
-
-        const data = await geminiResponse.json();
-        
-        if (data.error) {
-          console.log(`❌ ${config.name} API error:`, data.error);
-          lastError = data.error.message;
-          continue;
-        }
-
-        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        if (reply) {
-          console.log(`✅ Success with ${config.name}!`);
-          return res.json({ 
-            success: true, 
-            message: reply.trim(),
-            model: config.name,
-            timestamp: new Date().toISOString()
-          });
+        if (geminiResponse.ok) {
+          const data = await geminiResponse.json();
+          const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          
+          if (reply) {
+            return res.json({ 
+              success: true, 
+              message: reply.trim(),
+              model: config.name
+            });
+          }
         }
       } catch (err) {
-        console.log(`❌ ${config.name} exception:`, err.message);
-        lastError = err.message;
         continue;
       }
     }
 
-    throw new Error(`All models failed. Last error: ${lastError}`);
+    throw new Error('All models failed');
 
   } catch (err) {
-    console.error('🚨 Chat Error:', err.message);
-    
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to process chat request',
-      details: err.message
+      error: 'Failed to process chat request'
     });
   }
 });
@@ -401,6 +415,24 @@ app.use('/api/leetcode', require('./routes/leetcode'));
 app.use('/api/hackerrank', require('./routes/hackerrank'));
 app.use('/api/upload', upload.single('resume'), require('./routes/upload'));
 app.use('/api/analyze', require('./routes/analyze'));
+
+// ============================================
+// VERIFICATION ROUTES (NEW - FIXED)
+// ============================================
+try {
+  const verificationRouter = require('./routes/verification');
+  app.use('/api/verification', verificationRouter);
+  console.log('✅ Verification routes loaded');
+} catch (err) {
+  console.warn('⚠️  Verification routes not found:', err.message);
+  // Fallback route
+  app.all('/api/verification/*', (req, res) => {
+    res.status(503).json({ 
+      success: false, 
+      error: 'Verification system unavailable. MongoDB or routes not configured.' 
+    });
+  });
+}
 
 // ============================================
 // ERROR HANDLERS
@@ -419,22 +451,39 @@ app.use((error, req, res, next) => {
     return res.status(400).json({ error: error.message });
   }
   
-  res.status(500).json({ error: error.message });
+  res.status(500).json({ 
+    error: error.message,
+    ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+  });
 });
 
 // ============================================
 // START SERVER
 // ============================================
-const server = app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.clear();
   console.log('='.repeat(60));
-  console.log(`🚀 Server: http://localhost:${PORT}`);
+  console.log(`🚀 Server: ${process.env.NODE_ENV === 'production' ? 'https://thenewdevprof.onrender.com' : `http://localhost:${PORT}`}`);
   console.log(`📱 Client: ${process.env.CLIENT_URL || 'http://localhost:5173'}`);
-  console.log(`📁 Uploads: ${uploadsDir}`);
-  console.log(`🔑 Gemini: ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
   console.log(`🔐 Google OAuth: ${process.env.GOOGLE_CLIENT_ID ? '✅' : '❌'}`);
-  console.log(`🔒 JWT Secret: ${process.env.JWT_SECRET ? '✅' : '❌'}`);
+  console.log(`🗄️  MongoDB: ${mongoose.connection.readyState === 1 ? '✅' : '❌'}`);
+  console.log(`⚡ Socket.IO: ✅`);
+  console.log(`📧 Email: ${process.env.EMAIL_USER ? '✅' : '❌'}`);
   console.log('='.repeat(60));
 });
 
-module.exports = app;
+// ============================================
+// GRACEFUL SHUTDOWN
+// ============================================
+process.on('SIGTERM', () => {
+  console.log('👋 SIGTERM signal received: closing HTTP server');
+  httpServer.close(() => {
+    console.log('✅ HTTP server closed');
+    mongoose.connection.close(false, () => {
+      console.log('✅ MongoDB connection closed');
+      process.exit(0);
+    });
+  });
+});
+
+module.exports = { app, httpServer, io };
