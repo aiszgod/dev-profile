@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getApiUrl } from '../utils/apiUrl'; // ✅ IMPORT THIS
 
 // ProfileConnect Component
 const ProfileConnect = ({
@@ -18,11 +19,15 @@ const ProfileConnect = ({
 
     try {
       const promises = [];
+      
+      // ✅ Get API URL using helper
+      const apiUrl = getApiUrl();
+      console.log('🔗 API URL:', apiUrl);
 
       // -------- GitHub --------
       if (githubUser.trim()) {
         promises.push(
-          fetch(`${import.meta.env.VITE_API_URL}/github/${githubUser.trim()}`)
+          fetch(`${apiUrl}/github/${githubUser.trim()}`) // ✅ FIXED
             .then(async res => {
               if (!res.ok) {
                 const err = await res.json();
@@ -55,7 +60,7 @@ const ProfileConnect = ({
       // -------- LeetCode --------
       if (leetcodeUser.trim()) {
         promises.push(
-          fetch(`${import.meta.env.VITE_API_URL}/leetcode/${leetcodeUser.trim()}`)
+          fetch(`${apiUrl}/leetcode/${leetcodeUser.trim()}`) // ✅ FIXED
             .then(async res => {
               if (!res.ok) {
                 const err = await res.json();
@@ -80,7 +85,7 @@ const ProfileConnect = ({
       // -------- HackerRank --------
       if (hackerrankUser.trim()) {
         promises.push(
-          fetch(`${import.meta.env.VITE_API_URL}/hackerrank/${hackerrankUser.trim()}`)
+          fetch(`${apiUrl}/hackerrank/${hackerrankUser.trim()}`) // ✅ FIXED
             .then(async res => {
               if (!res.ok) {
                 const err = await res.json();

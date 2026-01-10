@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Upload, FileText, Loader2, Sparkles } from 'lucide-react';
 import { uploadResume, analyzeProfile } from '../services/api';
+import { getApiUrl } from '../utils/apiUrl'; // ✅ IMPORT THIS
 
-// CVUploader Component  
 // CVUploader Component  
 const CVUploader = ({ setResumeData, githubData, leetcodeData, hackerrankData, setAiAnalysis }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -38,12 +38,21 @@ const CVUploader = ({ setResumeData, githubData, leetcodeData, hackerrankData, s
       const formData = new FormData();
       formData.append('resume', file);
       
-const uploadResponse = await fetch(`${import.meta.env.VITE_API_URL}/upload`, {
+      // ✅ FIXED: Use getApiUrl helper
+      const apiUrl = getApiUrl();
+      const uploadUrl = `${apiUrl}/upload`;
+      
+      console.log('📤 Uploading to:', uploadUrl);
+
+      const uploadResponse = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
       });
       
-      if (!uploadResponse.ok) throw new Error('Upload failed');
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
       
       const uploadResult = await uploadResponse.json();
       console.log('✅ Upload result:', uploadResult);
@@ -56,7 +65,7 @@ const uploadResponse = await fetch(`${import.meta.env.VITE_API_URL}/upload`, {
       console.log('🤖 Starting AI analysis...');
       
       try {
-const analysisResponse = await fetch(`${import.meta.env.VITE_API_URL}/analyze`, {
+        const analysisResponse = await fetch(`${apiUrl}/analyze`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
