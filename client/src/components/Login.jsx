@@ -1,7 +1,13 @@
 import { Sparkles, LogIn, Shield } from 'lucide-react';
 
 export default function Login() {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  // Get API URL and remove trailing /api if present
+  let apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  
+  // Remove /api suffix if it exists
+  if (apiUrl.endsWith('/api')) {
+    apiUrl = apiUrl.replace(/\/api$/, '');
+  }
 
   const handleGoogleLogin = () => {
     // Redirect to backend Google OAuth route
