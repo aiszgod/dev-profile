@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Sparkles, UserCheck, Loader2, CheckCircle } from 'lucide-react';
+import { getApiUrl } from '../utils/apiUrl';
 
 export default function CandidateForm() {
   const navigate = useNavigate();
@@ -32,9 +33,13 @@ export default function CandidateForm() {
     setError(null);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl();
+      const url = `${apiUrl}/verification/submit`;
       
-      const response = await fetch(`${apiUrl}/verification/submit`, {
+      console.log('📤 Submitting to:', url);
+      console.log('📋 Form data:', formData);
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -46,6 +51,7 @@ export default function CandidateForm() {
       });
 
       const data = await response.json();
+      console.log('📥 Response:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Submission failed');
@@ -54,7 +60,7 @@ export default function CandidateForm() {
       console.log('✅ Verification submitted:', data);
       setSuccess(data);
 
-      // Show success for 3 seconds, then navigate to chat
+      // Navigate to chat room after 3 seconds
       setTimeout(() => {
         navigate(`/chat/${data.data.roomId}`);
       }, 3000);
@@ -90,14 +96,12 @@ export default function CandidateForm() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-950 to-slate-900 text-white">
-      {/* Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute top-1/2 -left-40 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-700"></div>
       </div>
 
       <div className="relative container mx-auto px-4 py-8 max-w-2xl">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <div className="relative">
@@ -111,10 +115,8 @@ export default function CandidateForm() {
           <p className="text-slate-300">Submit candidate details to initiate verification process</p>
         </div>
 
-        {/* Form */}
         <div className="bg-gradient-to-br from-slate-900/80 to-indigo-900/50 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-6 sm:p-8 shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Candidate Name */}
             <div>
               <label className="block mb-2 font-semibold text-slate-200">
                 Candidate Name *
@@ -130,7 +132,6 @@ export default function CandidateForm() {
               />
             </div>
 
-            {/* Candidate Email */}
             <div>
               <label className="block mb-2 font-semibold text-slate-200">
                 Candidate Email *
@@ -146,7 +147,6 @@ export default function CandidateForm() {
               />
             </div>
 
-            {/* Skills */}
             <div>
               <label className="block mb-2 font-semibold text-slate-200">
                 Skills *
@@ -162,7 +162,6 @@ export default function CandidateForm() {
               />
             </div>
 
-            {/* Experience */}
             <div>
               <label className="block mb-2 font-semibold text-slate-200">
                 Experience *
@@ -178,7 +177,6 @@ export default function CandidateForm() {
               />
             </div>
 
-            {/* Employer Email */}
             <div>
               <label className="block mb-2 font-semibold text-slate-200">
                 Previous Employer / Faculty Email *
@@ -197,14 +195,12 @@ export default function CandidateForm() {
               </p>
             </div>
 
-            {/* Error Message */}
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
                 <p className="text-red-300 text-sm">{error}</p>
               </div>
             )}
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
@@ -224,7 +220,6 @@ export default function CandidateForm() {
             </button>
           </form>
 
-          {/* Info */}
           <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
             <p className="text-sm text-blue-300">
               💡 <strong>Note:</strong> The employer will receive an email with a unique link to join the verification chat room.
@@ -232,7 +227,6 @@ export default function CandidateForm() {
           </div>
         </div>
 
-        {/* Back to Dashboard */}
         <div className="text-center mt-6">
           <button
             onClick={() => navigate('/dashboard')}
