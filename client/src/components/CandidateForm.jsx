@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Send, Loader2, CheckCircle } from 'lucide-react';
-import { getApiUrl } from '../../utils/apiUrl';
+import { getApiUrl } from '../utils/apiUrl';
 
 const CandidateForm = () => {
   const [formData, setFormData] = useState({
